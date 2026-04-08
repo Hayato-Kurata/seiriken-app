@@ -266,18 +266,6 @@
       </div>
     </div>
 
-    <!-- メインアクション -->
-    <div class="actions">
-      <button class="btn btn-release release-btn" onclick="releaseSeat(1)">
-        🪑 席が空いた → 次の人を自動呼び出し
-      </button>
-      <button class="btn btn-release release-btn" style="font-size:16px; padding:14px;" onclick="releaseSeat(2)">
-        🪑🪑 2席同時に空いた
-      </button>
-      <button class="btn btn-release release-btn" style="font-size:16px; padding:14px;" onclick="releaseSeat(3)">
-        🪑🪑🪑 3席同時に空いた
-      </button>
-    </div>
     <!-- 席マップ -->
     <div style="background:rgba(255,255,255,0.08); border-radius:14px; padding:16px; margin-bottom:20px;">
       <h3 style="font-size:14px; opacity:0.7; margin-bottom:12px;">席マップ（タップで空き/使用中を切替）</h3>
@@ -468,7 +456,16 @@
         });
         const data = await res.json();
         updateUI(data);
-        addLog(occupied ? `🪑 席${seatNum}を解放` : `➕ 席${seatNum}を使用中に`);
+        if (occupied) {
+          if (data.calledNumbers && data.calledNumbers.length > 0) {
+            const nums = data.calledNumbers.map(n => `No.${n.number}(${n.people}名→席${n.seats.join(",")})`).join(", ");
+            addLog(`🪑 席${seatNum}解放 → ${nums} を自動呼び出し`);
+          } else {
+            addLog(`🪑 席${seatNum}を解放`);
+          }
+        } else {
+          addLog(`➕ 席${seatNum}を使用中に`);
+        }
       } catch {}
     }
 

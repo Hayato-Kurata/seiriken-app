@@ -305,7 +305,7 @@ app.post("/api/admin/release-seat", requireAdmin, (req, res) => {
   res.json(makeAdminResponse(day, { calledNumbers }));
 });
 
-// スタッフ: 座席を個別にON/OFF（開場時の直接案内用）
+// スタッフ: 座席を個別にON/OFF → 解放時は自動で次を呼ぶ
 app.post("/api/admin/set-seat", requireAdmin, (req, res) => {
   const today = getToday();
   const day = getDayState(today);
@@ -315,7 +315,9 @@ app.post("/api/admin/set-seat", requireAdmin, (req, res) => {
     day.seats[seat] = occupied ? "manual" : null;
   }
 
-  res.json(makeAdminResponse(day));
+  // 席が解放された場合、次の組を自動呼び出し
+  const calledNumbers = occupied ? [] : callFittingGroups(day);
+  res.json(makeAdminResponse(day, { calledNumbers }));
 });
 
 // スタッフ: 座席数を一括調整（従来互換）
