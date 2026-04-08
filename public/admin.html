@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スタッフ画面 | 整理券管理</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+      background: #0f0f23;
+      color: #fff;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: #0f3460;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .header h1 { font-size: 18px; }
+    .header .sub { font-size: 13px; opacity: 0.7; margin-top: 4px; }
+
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    /* ステータス - 大きく見やすく */
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 16px 10px;
+      text-align: center;
+    }
+
+    .stat-card .label { font-size: 13px; opacity: 0.7; }
+    .stat-card .value { font-size: 32px; font-weight: bold; margin-top: 6px; }
+    .stat-card .value.red { color: #e94560; }
+    .stat-card .value.green { color: #4ecdc4; }
+    .stat-card .value.blue { color: #45b7d1; }
+
+    /* メインアクション */
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .btn {
+      padding: 20px;
+      font-size: 20px;
+      font-weight: bold;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-call {
+      background: linear-gradient(135deg, #e94560, #c73e55);
+      color: #fff;
+    }
+
+    .btn-release {
+      background: linear-gradient(135deg, #4ecdc4, #3db8b0);
+      color: #fff;
+    }
+
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* QRコード */
+    .qr-section {
+      background: rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 16px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .qr-section h3 {
+      font-size: 14px;
+      opacity: 0.7;
+      margin-bottom: 12px;
+    }
+
+    .qr-section img {
+      width: 200px;
+      height: 200px;
+      border-radius: 8px;
+    }
+
+    .qr-section .url {
+      font-size: 12px;
+      opacity: 0.5;
+      margin-top: 8px;
+      word-break: break-all;
+    }
+
+    .qr-input {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .qr-input input {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 14px;
+    }
+
+    .qr-input button {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      background: #0f3460;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* ログ */
+    .log-section {
+      background: rgba(255,255,255,0.05);
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .log-section h3 {
+      font-size: 14px;
+      opacity: 0.7;
+      margin-bottom: 8px;
+    }
+
+    .log-entry {
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .log-entry .time { opacity: 0.5; }
+
+    .back-link {
+      text-align: center;
+      margin-top: 20px;
+      padding-bottom: 20px;
+    }
+
+    .back-link a {
+      color: rgba(255,255,255,0.4);
+      font-size: 13px;
+    }
+
+    /* ログイン画面 */
+    .login-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 60vh;
+      padding: 20px;
+    }
+
+    .login-box {
+      background: rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 32px 24px;
+      width: 100%;
+      max-width: 340px;
+      text-align: center;
+    }
+
+    .login-box h2 {
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
+
+    .login-box input {
+      width: 100%;
+      padding: 14px;
+      border-radius: 10px;
+      border: 2px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 18px;
+      text-align: center;
+      margin-bottom: 14px;
+      letter-spacing: 2px;
+    }
+
+    .login-box input::placeholder { color: rgba(255,255,255,0.3); }
+
+    .login-box .btn-login {
+      width: 100%;
+      padding: 14px;
+      border-radius: 10px;
+      border: none;
+      background: #0f3460;
+      color: #fff;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .login-error {
+      color: #e94560;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- ログイン画面 -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-box">
+      <h2>🔧 スタッフログイン</h2>
+      <input type="password" id="password-input" placeholder="パスワード" onkeydown="if(event.key==='Enter')login()">
+      <button class="btn-login" onclick="login()">ログイン</button>
+      <div class="login-error hidden" id="login-error">パスワードが違います</div>
+    </div>
+  </div>
+
+  <!-- メイン画面 -->
+  <div id="main-screen" class="hidden">
+  <div class="header">
+    <h1>🔧 スタッフ管理画面</h1>
+    <div class="sub">指キーホルダーワークショップ ｜ No.0334</div>
+  </div>
+
+  <div class="container">
+    <!-- ステータス -->
+    <div class="stats">
+      <div class="stat-card">
+        <div class="label">呼出中の番号</div>
+        <div class="value red" id="calling">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">発行済み</div>
+        <div class="value blue" id="issued">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">待ち人数</div>
+        <div class="value" id="waiting">-</div>
+      </div>
+    </div>
+
+    <!-- メインアクション -->
+    <div class="actions">
+      <button class="btn btn-call" id="btn-call" onclick="callNext()">
+        📢 次の番号を呼び出す
+      </button>
+      <button class="btn btn-release" id="btn-release" onclick="releaseSeat(1)">
+        🪑 席が空いた（1席）
+      </button>
+      <button class="btn btn-release" style="font-size:16px; padding:14px;" onclick="releaseSeat(2)">
+        🪑🪑 2席同時に空いた
+      </button>
+      <button class="btn btn-release" style="font-size:16px; padding:14px;" onclick="releaseSeat(3)">
+        🪑🪑🪑 3席同時に空いた
+      </button>
+    </div>
+
+    <!-- QRコード -->
+    <div class="qr-section">
+      <h3>来場者用QRコード</h3>
+      <div class="qr-input">
+        <input type="text" id="qr-url" placeholder="公開URLを入力（デプロイ後）">
+        <button onclick="generateQR()">生成</button>
+      </div>
+      <div id="qr-container"></div>
+    </div>
+
+    <!-- アクションログ -->
+    <div class="log-section">
+      <h3>操作ログ</h3>
+      <div id="log-list"></div>
+    </div>
+
+    <div class="back-link">
+      <a href="/">← 来場者画面を見る</a>
+    </div>
+  </div>
+  </div><!-- /main-screen -->
+
+  <script>
+    const TOTAL_SEATS = 9;
+    let currentState = { callingNumber: 0, seatsInUse: 0, totalIssued: 0 };
+    let adminToken = sessionStorage.getItem("admin_token") || "";
+    const logs = [];
+
+    // ログイン
+    async function login() {
+      const pw = document.getElementById("password-input").value;
+      const errEl = document.getElementById("login-error");
+      try {
+        const res = await fetch("/api/admin/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: pw }),
+        });
+        if (!res.ok) {
+          errEl.classList.remove("hidden");
+          return;
+        }
+        const data = await res.json();
+        adminToken = data.token;
+        sessionStorage.setItem("admin_token", adminToken);
+        showMainScreen();
+      } catch {
+        errEl.classList.remove("hidden");
+      }
+    }
+
+    function showMainScreen() {
+      document.getElementById("login-screen").classList.add("hidden");
+      document.getElementById("main-screen").classList.remove("hidden");
+      fetchStatus();
+      setInterval(fetchStatus, 3000);
+      generateQR();
+    }
+
+    function adminHeaders() {
+      return {
+        "Content-Type": "application/json",
+        "X-Admin-Token": adminToken,
+      };
+    }
+
+    function addLog(message) {
+      const now = new Date();
+      const time = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
+      logs.unshift({ time, message });
+      if (logs.length > 50) logs.pop();
+      renderLogs();
+    }
+
+    function renderLogs() {
+      const el = document.getElementById("log-list");
+      el.innerHTML = logs.map(l =>
+        `<div class="log-entry"><span>${l.message}</span><span class="time">${l.time}</span></div>`
+      ).join("");
+    }
+
+    function updateUI(data) {
+      currentState = data;
+      document.getElementById("calling").textContent = data.callingNumber || 0;
+      document.getElementById("issued").textContent = data.totalIssued || 0;
+
+      const waiting = Math.max(0, (data.totalIssued || 0) - (data.callingNumber || 0));
+      document.getElementById("waiting").textContent = waiting;
+
+      document.getElementById("btn-call").disabled = data.callingNumber >= data.totalIssued;
+      document.getElementById("btn-release").disabled = data.seatsInUse <= 0;
+
+    }
+
+    async function callNext() {
+      try {
+        const res = await fetch("/api/admin/call-next", { method: "POST", headers: adminHeaders() });
+        const data = await res.json();
+        updateUI(data);
+        addLog(`📢 No.${data.callingNumber} を呼び出し`);
+      } catch {}
+    }
+
+    async function releaseSeat(count) {
+      try {
+        const res = await fetch("/api/admin/release-seat", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify({ count }),
+        });
+        const data = await res.json();
+        updateUI(data);
+        if (data.calledNumbers && data.calledNumbers.length > 0) {
+          const nums = data.calledNumbers.map(n => `No.${n}`).join(", ");
+          addLog(`🪑→📢 ${count}席解放 → ${nums} を自動呼び出し`);
+        } else {
+          addLog(`🪑 ${count}席解放（待ちなし）`);
+        }
+      } catch {}
+    }
+
+    async function generateQR() {
+      const urlInput = document.getElementById("qr-url");
+      const url = urlInput.value.trim() || undefined;
+      const param = url ? `?url=${encodeURIComponent(url)}` : "";
+
+      try {
+        const res = await fetch(`/api/qrcode${param}`);
+        const data = await res.json();
+        document.getElementById("qr-container").innerHTML = `
+          <img src="${data.qr}" alt="QRコード">
+          <div class="url">${data.url}</div>
+        `;
+      } catch {
+        alert("QRコード生成に失敗しました");
+      }
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+        updateUI({
+          callingNumber: data.callingNumber,
+          seatsInUse: data.seatsInUse,
+          totalIssued: data.totalIssued,
+        });
+      } catch {}
+    }
+
+    // 初期化: トークンがあればログイン済みとして表示
+    if (adminToken) {
+      showMainScreen();
+    }
+  </script>
+</body>
+</html>
