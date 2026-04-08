@@ -341,11 +341,13 @@
 
       <div class="your-turn hidden" id="your-turn">
         <h3>🎉 あなたの番です！</h3>
-        <p>ブースへお越しください</p>
+        <p>受付までお越しください</p>
       </div>
 
       <div class="notify-hint">
         ページを開いたままにしておくと<br>順番が近づいたら通知でお知らせします
+        <br><br>
+        ※ 空き席数とグループ人数の関係で<br>順番が前後する場合があります
       </div>
     </div>
 
@@ -464,34 +466,38 @@
     function startPolling(myNumber) {
       async function poll() {
         try {
-          const res = await fetch("/api/status");
-          const data = await res.json();
+          const [statusRes, ticketRes] = await Promise.all([
+            fetch("/api/status"),
+            fetch(`/api/ticket-status/${myNumber}`),
+          ]);
+          const data = await statusRes.json();
+          const ticketData = await ticketRes.json();
 
-          const myWait = Math.max(0, myNumber - data.callingNumber - 1);
-          document.getElementById("my-wait").textContent = myWait;
           document.getElementById("calling-num").textContent = data.callingNumber || "-";
           document.getElementById("seats-now").textContent = data.availableSeats + " / 9";
-
-          const waitTime = estimateWait(myWait, data.availableSeats);
-          document.getElementById("my-wait-time").textContent =
-            myWait > 0 ? `待ち時間目安: ${waitTime}` : "";
 
           const yourTurn = document.getElementById("your-turn");
           const waitStatus = document.getElementById("wait-status");
 
-          if (data.callingNumber >= myNumber) {
+          if (ticketData.called) {
+            // 自分が呼ばれた
             yourTurn.classList.remove("hidden");
             waitStatus.classList.add("hidden");
 
             if (!notified && "Notification" in window && Notification.permission === "granted") {
               new Notification("🎉 順番が来ました！", {
-                body: "指キーホルダーワークショップのブースへお越しください",
+                body: "指キーホルダーワークショップの受付までお越しください",
               });
               notified = true;
             }
           } else {
             yourTurn.classList.add("hidden");
             waitStatus.classList.remove("hidden");
+
+            document.getElementById("my-wait").textContent = data.waitingCount;
+            const waitTime = estimateWait(data.waitingCount, data.availableSeats);
+            document.getElementById("my-wait-time").textContent =
+              data.waitingCount > 0 ? `待ち時間目安: ${waitTime}` : "";
           }
         } catch {}
       }

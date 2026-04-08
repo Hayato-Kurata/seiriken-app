@@ -44,10 +44,43 @@ function getDayState(date) {
       counter: 0,
       callingNumber: 0,
       seatsInUse: 0,
-      tickets: {},
+      tickets: {},       // visitorId -> ticket
+      ticketsByNum: {},   // number -> ticket
     };
   }
   return state[date];
+}
+
+const MAX_SKIP = 3; // これ以上スキップされたら席数に関わらず優先呼び出し
+
+// まだ呼ばれていないチケットのうち、空き席に収まる組を探す
+// ただしMAX_SKIP回以上スキップされた組は最優先で呼ぶ
+function getNextFitting(day, availableSeats) {
+  let firstWaiting = null;
+
+  for (let i = 1; i <= day.counter; i++) {
+    const t = day.ticketsByNum[i];
+    if (!t || t.called) continue;
+
+    // スキップされすぎた組は無条件で呼ぶ
+    if ((t.skipped || 0) >= MAX_SKIP) {
+      return t;
+    }
+
+    if (!firstWaiting) firstWaiting = t;
+
+    if ((t.people || 1) <= availableSeats) {
+      // この組より前にいる未呼び出し組のskipカウントを増やす
+      for (let j = 1; j < i; j++) {
+        const prev = day.ticketsByNum[j];
+        if (prev && !prev.called && (prev.people || 1) > availableSeats) {
+          prev.skipped = (prev.skipped || 0) + 1;
+        }
+      }
+      return t;
+    }
+  }
+  return null;
 }
 
 // --- API ---
@@ -77,15 +110,34 @@ app.post("/api/ticket", (req, res) => {
     issuedAt: new Date().toISOString(),
   };
   day.tickets[visitorId] = ticket;
+  day.ticketsByNum[ticket.number] = ticket;
 
   res.json({ ticket, alreadyIssued: false });
+});
+
+// 自分のチケットの呼び出し状態を確認
+app.get("/api/ticket-status/:number", (req, res) => {
+  const today = getToday();
+  const day = getDayState(today);
+  const num = parseInt(req.params.number);
+  const ticket = day.ticketsByNum[num];
+
+  if (!ticket) {
+    return res.json({ called: false, exists: false });
+  }
+  res.json({ called: !!ticket.called, exists: true });
 });
 
 // 現在の状況（来場者向け）
 app.get("/api/status", (req, res) => {
   const today = getToday();
   const day = getDayState(today);
-  const waiting = Math.max(0, day.counter - day.callingNumber);
+  // 未呼び出しのチケット数を待ち人数とする
+  let waiting = 0;
+  for (let i = day.callingNumber + 1; i <= day.counter; i++) {
+    const t = day.ticketsByNum[i];
+    if (t && !t.called) waiting++;
+  }
   const availableSeats = Math.max(0, TOTAL_SEATS - day.seatsInUse);
 
   res.json({
@@ -110,16 +162,16 @@ app.post("/api/admin/login", (req, res) => {
   res.json({ token });
 });
 
-// スタッフ: 次の番号を呼び出す
+// スタッフ: 次の番号を呼び出す（初期呼び出し用）
 app.post("/api/admin/call-next", requireAdmin, (req, res) => {
   const today = getToday();
   const day = getDayState(today);
+  const next = getNextFitting(day, TOTAL_SEATS - day.seatsInUse);
 
-  if (day.callingNumber < day.counter) {
-    day.callingNumber++;
-    if (day.seatsInUse < TOTAL_SEATS) {
-      day.seatsInUse++;
-    }
+  if (next) {
+    next.called = true;
+    day.callingNumber = Math.max(day.callingNumber, next.number);
+    day.seatsInUse += (next.people || 1);
   }
 
   res.json({
@@ -130,23 +182,24 @@ app.post("/api/admin/call-next", requireAdmin, (req, res) => {
   });
 });
 
-// スタッフ: 席が空いた → 自動で次の番号を呼び出す
+// スタッフ: 席が空いた → 人数を考慮して自動で次を呼び出す
 app.post("/api/admin/release-seat", requireAdmin, (req, res) => {
   const today = getToday();
   const day = getDayState(today);
   const count = Math.min(Math.max(parseInt(req.body.count) || 1, 1), TOTAL_SEATS);
   const calledNumbers = [];
 
-  for (let i = 0; i < count; i++) {
-    if (day.seatsInUse > 0) {
-      day.seatsInUse--;
-    }
-    // 待ちがいれば自動で次を呼び出し
-    if (day.callingNumber < day.counter) {
-      day.callingNumber++;
-      day.seatsInUse++;
-      calledNumbers.push(day.callingNumber);
-    }
+  // 席を解放
+  day.seatsInUse = Math.max(0, day.seatsInUse - count);
+
+  // 空き席に収まる組を効率よく呼び出す（席に収まるなら順番を飛ばす）
+  let fitting;
+  while ((fitting = getNextFitting(day, TOTAL_SEATS - day.seatsInUse))) {
+    const people = fitting.people || 1;
+    fitting.called = true;
+    day.callingNumber = Math.max(day.callingNumber, fitting.number);
+    day.seatsInUse += people;
+    calledNumbers.push({ number: fitting.number, people });
   }
 
   res.json({

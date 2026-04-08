@@ -268,17 +268,19 @@
 
     <!-- メインアクション -->
     <div class="actions">
-      <button class="btn btn-call" id="btn-call" onclick="callNext()">
-        📢 次の番号を呼び出す
-      </button>
       <button class="btn btn-release release-btn" onclick="releaseSeat(1)">
-        🪑 席が空いた（1席）
+        🪑 席が空いた → 次の人を自動呼び出し
       </button>
       <button class="btn btn-release release-btn" style="font-size:16px; padding:14px;" onclick="releaseSeat(2)">
         🪑🪑 2席同時に空いた
       </button>
       <button class="btn btn-release release-btn" style="font-size:16px; padding:14px;" onclick="releaseSeat(3)">
         🪑🪑🪑 3席同時に空いた
+      </button>
+    </div>
+    <div style="text-align:center; margin-bottom:20px;">
+      <button id="btn-call" onclick="callNext()" style="background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.2); padding:12px 20px; border-radius:10px; font-size:14px; cursor:pointer;">
+        📢 次の番号を呼び出す（開場時の初期呼び出し用）
       </button>
     </div>
 
@@ -396,10 +398,10 @@
         const data = await res.json();
         updateUI(data);
         if (data.calledNumbers && data.calledNumbers.length > 0) {
-          const nums = data.calledNumbers.map(n => `No.${n}`).join(", ");
+          const nums = data.calledNumbers.map(n => `No.${n.number}(${n.people}名)`).join(", ");
           addLog(`🪑→📢 ${count}席解放 → ${nums} を自動呼び出し`);
         } else {
-          addLog(`🪑 ${count}席解放（待ちなし）`);
+          addLog(`🪑 ${count}席解放（待ちなし or 席数不足）`);
         }
       } catch {}
     }
