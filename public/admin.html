@@ -284,6 +284,32 @@
       </button>
     </div>
 
+    <!-- 不在スキップ -->
+    <div style="background:rgba(255,255,255,0.08); border-radius:14px; padding:16px; margin-bottom:20px;">
+      <h3 style="font-size:14px; opacity:0.7; margin-bottom:10px;">呼んだけど来ない人をスキップ</h3>
+      <div style="display:flex; gap:8px;">
+        <input type="number" id="skip-number" placeholder="番号" style="flex:1; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.1); color:#fff; font-size:16px;">
+        <button onclick="skipNoShow()" style="padding:10px 16px; border-radius:8px; border:none; background:#e94560; color:#fff; font-size:14px; font-weight:bold; cursor:pointer;">スキップ</button>
+      </div>
+    </div>
+
+    <!-- 手動発行（スマホ使えない人用） -->
+    <div style="background:rgba(255,255,255,0.08); border-radius:14px; padding:16px; margin-bottom:20px;">
+      <h3 style="font-size:14px; opacity:0.7; margin-bottom:10px;">手動発行（スマホが使えない方用）</h3>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="manual-people" style="flex:1; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.1); color:#fff; font-size:16px;">
+          <option value="1">1名</option>
+          <option value="2">2名</option>
+          <option value="3">3名</option>
+          <option value="4">4名</option>
+          <option value="5">5名</option>
+          <option value="6">6名</option>
+        </select>
+        <button onclick="manualIssue()" style="padding:10px 16px; border-radius:8px; border:none; background:#45b7d1; color:#fff; font-size:14px; font-weight:bold; cursor:pointer;">発行</button>
+      </div>
+      <div id="manual-result" style="margin-top:10px; font-size:14px;"></div>
+    </div>
+
     <!-- QRコード -->
     <div class="qr-section">
       <h3>来場者用QRコード</h3>
@@ -418,6 +444,46 @@
         } else {
           addLog(`🪑 ${count}席解放（待ちなし or 席数不足）`);
         }
+      } catch {}
+    }
+
+    async function skipNoShow() {
+      const num = parseInt(document.getElementById("skip-number").value);
+      if (!num) { alert("番号を入力してください"); return; }
+      try {
+        const res = await adminFetch("/api/admin/skip", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify({ number: num }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          addLog(`⚠️ No.${num} スキップ失敗: ${data.error}`);
+        } else {
+          updateUI(data);
+          addLog(`⏭️ No.${num} 不在スキップ`);
+          if (data.calledNumbers && data.calledNumbers.length > 0) {
+            const nums = data.calledNumbers.map(n => `No.${n.number}(${n.people}名)`).join(", ");
+            addLog(`📢 → ${nums} を自動呼び出し`);
+          }
+        }
+        document.getElementById("skip-number").value = "";
+      } catch {}
+    }
+
+    async function manualIssue() {
+      const people = parseInt(document.getElementById("manual-people").value) || 1;
+      try {
+        const res = await adminFetch("/api/admin/manual-issue", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify({ people }),
+        });
+        const data = await res.json();
+        document.getElementById("manual-result").textContent =
+          `✅ No.${data.ticket.number} を発行しました（${people}名）`;
+        addLog(`🎫 手動発行: No.${data.ticket.number}（${people}名）`);
+        fetchStatus();
       } catch {}
     }
 

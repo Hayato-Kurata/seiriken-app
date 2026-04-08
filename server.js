@@ -245,6 +245,60 @@ app.post("/api/admin/set-seats", requireAdmin, (req, res) => {
   });
 });
 
+// スタッフ: 手動で整理券発行（スマホ使えない人用）
+app.post("/api/admin/manual-issue", requireAdmin, (req, res) => {
+  const today = getToday();
+  const day = getDayState(today);
+  const people = Math.min(Math.max(parseInt(req.body.people) || 1, 1), 9);
+
+  day.counter++;
+  const ticket = {
+    number: day.counter,
+    date: today,
+    people,
+    issuedAt: new Date().toISOString(),
+    manual: true,
+  };
+  day.ticketsByNum[ticket.number] = ticket;
+
+  res.json({ ticket });
+});
+
+// スタッフ: 不在スキップ（呼んだけど来ない人を飛ばす）
+app.post("/api/admin/skip", requireAdmin, (req, res) => {
+  const today = getToday();
+  const day = getDayState(today);
+  const { number } = req.body;
+  const ticket = day.ticketsByNum[number];
+
+  if (ticket && ticket.called) {
+    ticket.skippedNoShow = true;
+    // その人の分の席を解放
+    day.seatsInUse = Math.max(0, day.seatsInUse - (ticket.people || 1));
+
+    // 空いた席で次を呼ぶ
+    const calledNumbers = [];
+    let fitting;
+    while ((fitting = getNextFitting(day, TOTAL_SEATS - day.seatsInUse))) {
+      fitting.called = true;
+      day.callingNumber = Math.max(day.callingNumber, fitting.number);
+      day.seatsInUse += (fitting.people || 1);
+      calledNumbers.push({ number: fitting.number, people: fitting.people || 1 });
+    }
+
+    return res.json({
+      skipped: number,
+      callingNumber: day.callingNumber,
+      seatsInUse: day.seatsInUse,
+      totalIssued: day.counter,
+      availableSeats: Math.max(0, TOTAL_SEATS - day.seatsInUse),
+      calledNumbers,
+    });
+  }
+
+  res.json({ error: "該当チケットなし" });
+});
+
 // QRコード生成
 app.get("/api/qrcode", async (req, res) => {
   const baseUrl = req.query.url || `${req.protocol}://${req.get("host")}`;
@@ -263,4 +317,11 @@ app.get("/api/qrcode", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`整理券アプリ起動: http://localhost:${PORT}`);
   console.log(`スタッフ画面: http://localhost:${PORT}/admin.html`);
+
+  // Renderスリープ防止: 14分ごとに自己ping
+  if (process.env.RENDER_EXTERNAL_URL) {
+    setInterval(() => {
+      fetch(`${process.env.RENDER_EXTERNAL_URL}/api/status`).catch(() => {});
+    }, 14 * 60 * 1000);
+  }
 });

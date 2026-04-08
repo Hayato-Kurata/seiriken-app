@@ -9,3 +9,5 @@ services:
         value: yubi2026
       - key: NODE_ENV
         value: production
+      - key: RENDER_EXTERNAL_URL
+        value: https://seiriken-app.onrender.com
