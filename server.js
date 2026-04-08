@@ -125,7 +125,28 @@ app.get("/api/ticket-status/:number", (req, res) => {
   if (!ticket) {
     return res.json({ called: false, exists: false });
   }
-  res.json({ called: !!ticket.called, exists: true });
+
+  // 自分より前の未呼び出し人数を数える
+  let aheadCount = 0;
+  for (let i = 1; i < num; i++) {
+    const t = day.ticketsByNum[i];
+    if (t && !t.called) aheadCount++;
+  }
+
+  // 目安の集合時間を計算（現在時刻 + 待ち時間）
+  const seats = Math.max(TOTAL_SEATS - day.seatsInUse, 1);
+  const waitMinutes = Math.ceil(aheadCount / seats) * 20;
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  const estimated = new Date(now.getTime() + waitMinutes * 60 * 1000);
+  const estHH = String(estimated.getHours()).padStart(2, "0");
+  const estMM = String(estimated.getMinutes()).padStart(2, "0");
+
+  res.json({
+    called: !!ticket.called,
+    exists: true,
+    aheadCount,
+    estimatedTime: ticket.called ? null : `${estHH}:${estMM}`,
+  });
 });
 
 // 現在の状況（来場者向け）

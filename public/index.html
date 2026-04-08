@@ -325,8 +325,9 @@
       <!-- 待ち状況 -->
       <div class="wait-status" id="wait-status">
         <div class="wait-label">あなたの前に</div>
-        <div class="wait-count"><span id="my-wait">-</span> 人待ち</div>
-        <div class="wait-time" id="my-wait-time"></div>
+        <div class="wait-count"><span id="my-wait">-</span> 組待ち</div>
+        <div class="estimated-time" id="estimated-time" style="font-size:20px; font-weight:bold; margin:8px 0; color:#e94560;"></div>
+        <div class="wait-time" id="my-wait-time" style="font-size:13px; opacity:0.6;"></div>
         <div class="calling-info">
           <div class="calling-box">
             <div class="cb-label">現在の呼出番号</div>
@@ -494,10 +495,15 @@
             yourTurn.classList.add("hidden");
             waitStatus.classList.remove("hidden");
 
-            document.getElementById("my-wait").textContent = data.waitingCount;
-            const waitTime = estimateWait(data.waitingCount, data.availableSeats);
+            document.getElementById("my-wait").textContent = ticketData.aheadCount || 0;
+            if (ticketData.estimatedTime) {
+              document.getElementById("estimated-time").textContent =
+                `集合時間の目安: ${ticketData.estimatedTime} 頃`;
+            } else {
+              document.getElementById("estimated-time").textContent = "";
+            }
             document.getElementById("my-wait-time").textContent =
-              data.waitingCount > 0 ? `待ち時間目安: ${waitTime}` : "";
+              "※ 状況により前後する場合があります";
           }
         } catch {}
       }
