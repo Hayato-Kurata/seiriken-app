@@ -262,20 +262,12 @@
   <div class="container">
     <!-- 取得前画面 -->
     <div id="before-section" class="get-ticket-section">
-      <div class="status-cards">
+      <div class="status-cards" style="grid-template-columns:1fr;">
         <div class="status-card">
-          <div class="label">空き席</div>
-          <div class="value highlight" id="available-seats">-</div>
-          <div class="sub">/ 9席</div>
-        </div>
-        <div class="status-card">
-          <div class="label">待ち人数</div>
+          <div class="label">現在の待ち組数</div>
           <div class="value" id="waiting-count">-</div>
-          <div class="sub" id="wait-time-est"></div>
         </div>
       </div>
-
-      <div class="wait-estimate" id="wait-estimate"></div>
 
       <div class="people-select">
         <div class="label">参加人数を選んでください</div>
@@ -332,10 +324,6 @@
           <div class="calling-box">
             <div class="cb-label">現在の呼出番号</div>
             <div class="cb-value" id="calling-num">-</div>
-          </div>
-          <div class="calling-box">
-            <div class="cb-label">空き席</div>
-            <div class="cb-value" id="seats-now">-</div>
           </div>
         </div>
       </div>
@@ -401,14 +389,7 @@
       try {
         const res = await fetch("/api/status");
         const data = await res.json();
-        document.getElementById("available-seats").textContent = data.availableSeats;
-        document.getElementById("waiting-count").textContent = data.waitingCount;
-
-        const est = estimateWait(data.waitingCount, data.availableSeats);
-        document.getElementById("wait-estimate").textContent =
-          data.availableSeats > 0 && data.waitingCount === 0
-            ? "🟢 今すぐご案内できます！"
-            : `⏱ 現在の待ち時間目安: ${est}`;
+        document.getElementById("waiting-count").textContent = data.waitingCount + " 組";
       } catch {}
     }
 
@@ -492,7 +473,6 @@
           const ticketData = await ticketRes.json();
 
           document.getElementById("calling-num").textContent = data.callingNumber || "-";
-          document.getElementById("seats-now").textContent = data.availableSeats + " / 9";
 
           const yourTurn = document.getElementById("your-turn");
           const waitStatus = document.getElementById("wait-status");
