@@ -233,6 +233,7 @@ app.get("/api/status", (req, res) => {
     availableSeats,
     waitingCount: waiting,
     tables: getTableAvailability(day),
+    seats: { ...day.seats },
   });
 });
 

@@ -560,11 +560,7 @@
       try {
         const res = await fetch("/api/status");
         const data = await res.json();
-        updateUI({
-          callingNumber: data.callingNumber,
-          seatsInUse: data.seatsInUse,
-          totalIssued: data.totalIssued,
-        });
+        updateUI(data);
       } catch {}
     }
 
