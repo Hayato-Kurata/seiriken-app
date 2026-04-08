@@ -343,6 +343,9 @@
       <div class="your-turn hidden" id="your-turn">
         <h3>🎉 あなたの番です！</h3>
         <p>受付までお越しください</p>
+        <button onclick="retakeTicket()" style="margin-top:14px; padding:10px 24px; border-radius:30px; border:2px solid #fff; background:transparent; color:#fff; font-size:14px; font-weight:bold; cursor:pointer;">
+          🔄 もう一度参加する
+        </button>
       </div>
 
       <div class="notify-hint">
@@ -438,6 +441,26 @@
         btn.disabled = false;
         btn.textContent = "整理券を取得する";
       }
+    }
+
+    // もう一度参加する
+    async function retakeTicket() {
+      // visitorIdをリセットして新しいチケットを取得
+      const newId = "v_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
+      localStorage.setItem(VISITOR_KEY, newId);
+      localStorage.removeItem(TICKET_KEY);
+      notified = false;
+
+      // 取得前画面に戻す
+      document.getElementById("ticket-section").classList.add("hidden");
+      document.getElementById("before-section").classList.remove("hidden");
+      document.getElementById("btn-get").disabled = false;
+      document.getElementById("btn-get").textContent = "整理券を取得する";
+      selectedPeople = 1;
+      document.querySelectorAll(".people-btn").forEach(btn => {
+        btn.classList.toggle("selected", parseInt(btn.dataset.count) === 1);
+      });
+      fetchStatus();
     }
 
     function showTicket(ticket) {
