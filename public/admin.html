@@ -278,10 +278,15 @@
         🪑🪑🪑 3席同時に空いた
       </button>
     </div>
-    <div style="text-align:center; margin-bottom:20px;">
-      <button id="btn-call" onclick="callNext()" style="background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.2); padding:12px 20px; border-radius:10px; font-size:14px; cursor:pointer;">
-        📢 次の番号を呼び出す（開場時の初期呼び出し用）
-      </button>
+    <!-- 席数調整 -->
+    <div style="background:rgba(255,255,255,0.08); border-radius:14px; padding:16px; margin-bottom:20px;">
+      <h3 style="font-size:14px; opacity:0.7; margin-bottom:10px;">現在の使用席数を調整</h3>
+      <div style="display:flex; gap:8px; align-items:center; justify-content:center;">
+        <button onclick="adjustSeats(-1)" style="width:48px; height:48px; border-radius:50%; border:none; background:rgba(78,205,196,0.3); color:#4ecdc4; font-size:24px; font-weight:bold; cursor:pointer;">−</button>
+        <span id="seats-display" style="font-size:32px; font-weight:bold; min-width:80px; text-align:center;">0 / 9</span>
+        <button onclick="adjustSeats(1)" style="width:48px; height:48px; border-radius:50%; border:none; background:rgba(233,69,96,0.3); color:#e94560; font-size:24px; font-weight:bold; cursor:pointer;">+</button>
+      </div>
+      <div style="text-align:center; margin-top:6px; font-size:12px; opacity:0.5;">開場時: 直接案内した分を+で追加</div>
     </div>
 
     <!-- 不在スキップ -->
@@ -414,9 +419,10 @@
       const waiting = Math.max(0, (data.totalIssued || 0) - (data.callingNumber || 0));
       document.getElementById("waiting").textContent = waiting;
 
-      document.getElementById("btn-call").disabled = data.callingNumber >= data.totalIssued;
       const releaseDisabled = data.seatsInUse <= 0 && data.callingNumber >= data.totalIssued;
       document.querySelectorAll(".release-btn").forEach(btn => btn.disabled = releaseDisabled);
+      const seatsDisp = document.getElementById("seats-display");
+      if (seatsDisp) seatsDisp.textContent = `${data.seatsInUse || 0} / ${TOTAL_SEATS}`;
 
     }
 
@@ -444,6 +450,20 @@
         } else {
           addLog(`🪑 ${count}席解放（待ちなし or 席数不足）`);
         }
+      } catch {}
+    }
+
+    async function adjustSeats(delta) {
+      const newVal = Math.max(0, Math.min(TOTAL_SEATS, (currentState.seatsInUse || 0) + delta));
+      try {
+        const res = await adminFetch("/api/admin/set-seats", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify({ seatsInUse: newVal }),
+        });
+        const data = await res.json();
+        updateUI(data);
+        addLog(delta > 0 ? `➕ 席使用: ${data.seatsInUse}/${TOTAL_SEATS}` : `➖ 席解放: ${data.seatsInUse}/${TOTAL_SEATS}`);
       } catch {}
     }
 
