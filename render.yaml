@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: seiriken-app
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: ADMIN_PASSWORD
+        value: yubi2026
+      - key: NODE_ENV
+        value: production
