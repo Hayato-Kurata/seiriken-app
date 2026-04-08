@@ -278,15 +278,28 @@
         🪑🪑🪑 3席同時に空いた
       </button>
     </div>
-    <!-- 席数調整 -->
+    <!-- 席マップ -->
     <div style="background:rgba(255,255,255,0.08); border-radius:14px; padding:16px; margin-bottom:20px;">
-      <h3 style="font-size:14px; opacity:0.7; margin-bottom:10px;">現在の使用席数を調整</h3>
-      <div style="display:flex; gap:8px; align-items:center; justify-content:center;">
-        <button onclick="adjustSeats(-1)" style="width:48px; height:48px; border-radius:50%; border:none; background:rgba(78,205,196,0.3); color:#4ecdc4; font-size:24px; font-weight:bold; cursor:pointer;">−</button>
-        <span id="seats-display" style="font-size:32px; font-weight:bold; min-width:80px; text-align:center;">0 / 9</span>
-        <button onclick="adjustSeats(1)" style="width:48px; height:48px; border-radius:50%; border:none; background:rgba(233,69,96,0.3); color:#e94560; font-size:24px; font-weight:bold; cursor:pointer;">+</button>
+      <h3 style="font-size:14px; opacity:0.7; margin-bottom:12px;">席マップ（タップで空き/使用中を切替）</h3>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; gap:10px;">
+          <div style="flex:1;">
+            <div style="font-size:11px; opacity:0.5; margin-bottom:4px;">テーブルA（左上）</div>
+            <div style="display:flex; gap:6px;" id="table-a"></div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:11px; opacity:0.5; margin-bottom:4px;">テーブルB（右上）</div>
+            <div style="display:flex; gap:6px;" id="table-b"></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px; opacity:0.5; margin-bottom:4px;">テーブルC（右側）</div>
+          <div style="display:flex; gap:6px;" id="table-c"></div>
+        </div>
       </div>
-      <div style="text-align:center; margin-top:6px; font-size:12px; opacity:0.5;">開場時: 直接案内した分を+で追加</div>
+      <div style="text-align:center; margin-top:8px; font-size:12px; opacity:0.5;">
+        <span id="seats-display">0 / 9</span> 使用中 ｜ 開場時: タップで直接案内分を登録
+      </div>
     </div>
 
     <!-- 不在スキップ -->
@@ -421,9 +434,42 @@
 
       const releaseDisabled = data.seatsInUse <= 0 && data.callingNumber >= data.totalIssued;
       document.querySelectorAll(".release-btn").forEach(btn => btn.disabled = releaseDisabled);
-      const seatsDisp = document.getElementById("seats-display");
-      if (seatsDisp) seatsDisp.textContent = `${data.seatsInUse || 0} / ${TOTAL_SEATS}`;
 
+      document.getElementById("seats-display").textContent = `${data.seatsInUse || 0} / ${TOTAL_SEATS}`;
+
+      // 席マップ描画
+      if (data.seats) {
+        renderSeatMap("table-a", [1,2,3], data.seats);
+        renderSeatMap("table-b", [4,5,6], data.seats);
+        renderSeatMap("table-c", [7,8,9], data.seats);
+      }
+    }
+
+    function renderSeatMap(containerId, seatNums, seats) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = seatNums.map(n => {
+        const occupied = seats[n] !== null;
+        const bg = occupied ? "rgba(233,69,96,0.3)" : "rgba(78,205,196,0.3)";
+        const border = occupied ? "2px solid #e94560" : "2px solid #4ecdc4";
+        const color = occupied ? "#e94560" : "#4ecdc4";
+        const label = occupied ? (seats[n] === "manual" ? "直" : `#${seats[n]}`) : n;
+        return `<button onclick="toggleSeat(${n})" style="flex:1; height:50px; border-radius:10px; background:${bg}; border:${border}; color:${color}; font-size:14px; font-weight:bold; cursor:pointer;">${label}</button>`;
+      }).join("");
+    }
+
+    async function toggleSeat(seatNum) {
+      const occupied = currentState.seats && currentState.seats[seatNum] !== null;
+      try {
+        const res = await adminFetch("/api/admin/set-seat", {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify({ seat: seatNum, occupied: !occupied }),
+        });
+        const data = await res.json();
+        updateUI(data);
+        addLog(occupied ? `🪑 席${seatNum}を解放` : `➕ 席${seatNum}を使用中に`);
+      } catch {}
     }
 
     async function callNext() {
@@ -450,20 +496,6 @@
         } else {
           addLog(`🪑 ${count}席解放（待ちなし or 席数不足）`);
         }
-      } catch {}
-    }
-
-    async function adjustSeats(delta) {
-      const newVal = Math.max(0, Math.min(TOTAL_SEATS, (currentState.seatsInUse || 0) + delta));
-      try {
-        const res = await adminFetch("/api/admin/set-seats", {
-          method: "POST",
-          headers: adminHeaders(),
-          body: JSON.stringify({ seatsInUse: newVal }),
-        });
-        const data = await res.json();
-        updateUI(data);
-        addLog(delta > 0 ? `➕ 席使用: ${data.seatsInUse}/${TOTAL_SEATS}` : `➖ 席解放: ${data.seatsInUse}/${TOTAL_SEATS}`);
       } catch {}
     }
 

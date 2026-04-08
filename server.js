@@ -9,6 +9,16 @@ const PORT = process.env.PORT || 3000;
 const TOTAL_SEATS = 9;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "yubi2026";
 
+// テーブル配置: 3テーブル × 3席
+// A(左上): 席1,2,3  B(右上): 席4,5,6  C(右側): 席7,8,9
+const TABLES = [
+  { name: "A", seats: [1, 2, 3] },
+  { name: "B", seats: [4, 5, 6] },
+  { name: "C", seats: [7, 8, 9] },
+];
+// 隣接テーブル（A-B は横並び、B-C は角で接続）
+const ADJACENT = { A: ["B"], B: ["A", "C"], C: ["B"] };
+
 // スタッフ認証トークン管理
 const adminTokens = new Set();
 
@@ -40,44 +50,101 @@ function getToday() {
 
 function getDayState(date) {
   if (!state[date]) {
+    // seats: { 1: null, 2: null, ... 9: null } — null=空き, ticketNumber=使用中
+    const seats = {};
+    for (let i = 1; i <= TOTAL_SEATS; i++) seats[i] = null;
     state[date] = {
       counter: 0,
       callingNumber: 0,
-      seatsInUse: 0,
-      tickets: {},       // visitorId -> ticket
-      ticketsByNum: {},   // number -> ticket
+      seats,
+      tickets: {},
+      ticketsByNum: {},
     };
   }
   return state[date];
 }
 
-const MAX_SKIP = 3; // これ以上スキップされたら席数に関わらず優先呼び出し
+// 使用中の席数を算出
+function getSeatsInUse(day) {
+  return Object.values(day.seats).filter(v => v !== null).length;
+}
 
-// まだ呼ばれていないチケットのうち、空き席に収まる組を探す
-// ただしMAX_SKIP回以上スキップされた組は最優先で呼ぶ
-function getNextFitting(day, availableSeats) {
-  let firstWaiting = null;
+// テーブルごとの空き席数
+function getTableAvailability(day) {
+  const result = {};
+  for (const table of TABLES) {
+    result[table.name] = table.seats.filter(s => day.seats[s] === null).length;
+  }
+  return result;
+}
 
+// 指定人数が座れる席を探す（同一テーブル優先、隣接テーブル結合も対応）
+function findSeatsForGroup(day, people) {
+  const avail = getTableAvailability(day);
+
+  // 1〜3人: 同一テーブルに収まるか
+  if (people <= 3) {
+    for (const table of TABLES) {
+      if (avail[table.name] >= people) {
+        const emptySeats = table.seats.filter(s => day.seats[s] === null);
+        return emptySeats.slice(0, people);
+      }
+    }
+  }
+
+  // 4〜6人: 隣接テーブル2つを結合
+  if (people <= 6) {
+    for (const table of TABLES) {
+      for (const adjName of ADJACENT[table.name]) {
+        const combined = avail[table.name] + avail[adjName];
+        if (combined >= people) {
+          const adjTable = TABLES.find(t => t.name === adjName);
+          const seats1 = table.seats.filter(s => day.seats[s] === null);
+          const seats2 = adjTable.seats.filter(s => day.seats[s] === null);
+          return [...seats1, ...seats2].slice(0, people);
+        }
+      }
+    }
+  }
+
+  // 7人以上: 全テーブルの空きを使う
+  const allEmpty = [];
+  for (const table of TABLES) {
+    allEmpty.push(...table.seats.filter(s => day.seats[s] === null));
+  }
+  if (allEmpty.length >= people) {
+    return allEmpty.slice(0, people);
+  }
+
+  return null; // 席が足りない
+}
+
+const MAX_SKIP = 3;
+
+// 隣接席に座れる組を探す（スキップ上限も考慮）
+function getNextFitting(day) {
   for (let i = 1; i <= day.counter; i++) {
     const t = day.ticketsByNum[i];
     if (!t || t.called) continue;
 
     // スキップされすぎた組は無条件で呼ぶ
     if ((t.skipped || 0) >= MAX_SKIP) {
-      return t;
+      return { ticket: t, seats: findSeatsForGroup(day, t.people || 1) || [] };
     }
 
-    if (!firstWaiting) firstWaiting = t;
-
-    if ((t.people || 1) <= availableSeats) {
-      // この組より前にいる未呼び出し組のskipカウントを増やす
+    const seats = findSeatsForGroup(day, t.people || 1);
+    if (seats) {
+      // この組より前の未呼び出し組のskipカウントを増やす
       for (let j = 1; j < i; j++) {
         const prev = day.ticketsByNum[j];
-        if (prev && !prev.called && (prev.people || 1) > availableSeats) {
-          prev.skipped = (prev.skipped || 0) + 1;
+        if (prev && !prev.called) {
+          const prevSeats = findSeatsForGroup(day, prev.people || 1);
+          if (!prevSeats) {
+            prev.skipped = (prev.skipped || 0) + 1;
+          }
         }
       }
-      return t;
+      return { ticket: t, seats };
     }
   }
   return null;
@@ -129,7 +196,7 @@ app.get("/api/ticket-status/:number", (req, res) => {
   }
 
   // 目安の集合時間を計算（現在時刻 + 待ち時間）
-  const seats = Math.max(TOTAL_SEATS - day.seatsInUse, 1);
+  const seats = Math.max(TOTAL_SEATS - getSeatsInUse(day), 1);
   const waitMinutes = Math.ceil(aheadCount / seats) * 20;
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
   const estimated = new Date(now.getTime() + waitMinutes * 60 * 1000);
@@ -154,16 +221,18 @@ app.get("/api/status", (req, res) => {
     const t = day.ticketsByNum[i];
     if (t && !t.called) waiting++;
   }
-  const availableSeats = Math.max(0, TOTAL_SEATS - day.seatsInUse);
+  const seatsInUse = getSeatsInUse(day);
+  const availableSeats = Math.max(0, TOTAL_SEATS - seatsInUse);
 
   res.json({
     date: today,
     totalIssued: day.counter,
     callingNumber: day.callingNumber,
-    seatsInUse: day.seatsInUse,
+    seatsInUse,
     totalSeats: TOTAL_SEATS,
     availableSeats,
     waitingCount: waiting,
+    tables: getTableAvailability(day),
   });
 });
 
@@ -178,71 +247,97 @@ app.post("/api/admin/login", (req, res) => {
   res.json({ token });
 });
 
-// スタッフ: 次の番号を呼び出す（初期呼び出し用）
-app.post("/api/admin/call-next", requireAdmin, (req, res) => {
-  const today = getToday();
-  const day = getDayState(today);
-  const next = getNextFitting(day, TOTAL_SEATS - day.seatsInUse);
-
-  if (next) {
-    next.called = true;
-    day.callingNumber = Math.max(day.callingNumber, next.number);
-    day.seatsInUse += (next.people || 1);
-  }
-
-  res.json({
+// レスポンス用のステータスを生成
+function makeAdminResponse(day, extra = {}) {
+  const seatsInUse = getSeatsInUse(day);
+  return {
     callingNumber: day.callingNumber,
-    seatsInUse: day.seatsInUse,
+    seatsInUse,
     totalIssued: day.counter,
-    availableSeats: Math.max(0, TOTAL_SEATS - day.seatsInUse),
-  });
-});
+    availableSeats: Math.max(0, TOTAL_SEATS - seatsInUse),
+    tables: getTableAvailability(day),
+    seats: { ...day.seats },
+    ...extra,
+  };
+}
 
-// スタッフ: 席が空いた → 人数を考慮して自動で次を呼び出す
+// 待ちの中から座れる組を呼び出す共通処理
+function callFittingGroups(day) {
+  const calledNumbers = [];
+  let result;
+  while ((result = getNextFitting(day))) {
+    const { ticket, seats } = result;
+    if (!seats || seats.length === 0) break;
+    ticket.called = true;
+    ticket.assignedSeats = seats;
+    seats.forEach(s => day.seats[s] = ticket.number);
+    day.callingNumber = Math.max(day.callingNumber, ticket.number);
+    calledNumbers.push({ number: ticket.number, people: ticket.people || 1, seats });
+  }
+  return calledNumbers;
+}
+
+// スタッフ: 席が空いた → 隣接席を考慮して自動で次を呼び出す
 app.post("/api/admin/release-seat", requireAdmin, (req, res) => {
   const today = getToday();
   const day = getDayState(today);
-  const count = Math.min(Math.max(parseInt(req.body.count) || 1, 1), TOTAL_SEATS);
-  const calledNumbers = [];
+  const { seatNumbers } = req.body;
 
-  // 席を解放
-  day.seatsInUse = Math.max(0, day.seatsInUse - count);
-
-  // 空き席に収まる組を効率よく呼び出す（席に収まるなら順番を飛ばす）
-  let fitting;
-  while ((fitting = getNextFitting(day, TOTAL_SEATS - day.seatsInUse))) {
-    const people = fitting.people || 1;
-    fitting.called = true;
-    day.callingNumber = Math.max(day.callingNumber, fitting.number);
-    day.seatsInUse += people;
-    calledNumbers.push({ number: fitting.number, people });
+  // 特定の席番号が指定された場合
+  if (Array.isArray(seatNumbers)) {
+    seatNumbers.forEach(s => {
+      if (day.seats[s] !== null) day.seats[s] = null;
+    });
+  } else {
+    // 従来互換: count指定で使用中の席を先頭から解放
+    const count = Math.min(Math.max(parseInt(req.body.count) || 1, 1), TOTAL_SEATS);
+    let released = 0;
+    for (let i = 1; i <= TOTAL_SEATS && released < count; i++) {
+      if (day.seats[i] !== null) {
+        day.seats[i] = null;
+        released++;
+      }
+    }
   }
 
-  res.json({
-    callingNumber: day.callingNumber,
-    seatsInUse: day.seatsInUse,
-    totalIssued: day.counter,
-    availableSeats: Math.max(0, TOTAL_SEATS - day.seatsInUse),
-    calledNumbers,
-  });
+  const calledNumbers = callFittingGroups(day);
+  res.json(makeAdminResponse(day, { calledNumbers }));
 });
 
-// スタッフ: 座席数を手動調整
+// スタッフ: 座席を個別にON/OFF（開場時の直接案内用）
+app.post("/api/admin/set-seat", requireAdmin, (req, res) => {
+  const today = getToday();
+  const day = getDayState(today);
+  const { seat, occupied } = req.body;
+
+  if (seat >= 1 && seat <= TOTAL_SEATS) {
+    day.seats[seat] = occupied ? "manual" : null;
+  }
+
+  res.json(makeAdminResponse(day));
+});
+
+// スタッフ: 座席数を一括調整（従来互換）
 app.post("/api/admin/set-seats", requireAdmin, (req, res) => {
   const today = getToday();
   const day = getDayState(today);
   const { seatsInUse } = req.body;
+  const target = Math.max(0, Math.min(TOTAL_SEATS, seatsInUse || 0));
+  const current = getSeatsInUse(day);
 
-  if (typeof seatsInUse === "number" && seatsInUse >= 0 && seatsInUse <= TOTAL_SEATS) {
-    day.seatsInUse = seatsInUse;
+  if (target > current) {
+    let added = 0;
+    for (let i = 1; i <= TOTAL_SEATS && added < target - current; i++) {
+      if (day.seats[i] === null) { day.seats[i] = "manual"; added++; }
+    }
+  } else if (target < current) {
+    let removed = 0;
+    for (let i = TOTAL_SEATS; i >= 1 && removed < current - target; i--) {
+      if (day.seats[i] !== null) { day.seats[i] = null; removed++; }
+    }
   }
 
-  res.json({
-    callingNumber: day.callingNumber,
-    seatsInUse: day.seatsInUse,
-    totalIssued: day.counter,
-    availableSeats: Math.max(0, TOTAL_SEATS - day.seatsInUse),
-  });
+  res.json(makeAdminResponse(day));
 });
 
 // スタッフ: 手動で整理券発行（スマホ使えない人用）
@@ -264,7 +359,7 @@ app.post("/api/admin/manual-issue", requireAdmin, (req, res) => {
   res.json({ ticket });
 });
 
-// スタッフ: 不在スキップ（呼んだけど来ない人を飛ばす）
+// スタッフ: 不在スキップ
 app.post("/api/admin/skip", requireAdmin, (req, res) => {
   const today = getToday();
   const day = getDayState(today);
@@ -273,27 +368,12 @@ app.post("/api/admin/skip", requireAdmin, (req, res) => {
 
   if (ticket && ticket.called) {
     ticket.skippedNoShow = true;
-    // その人の分の席を解放
-    day.seatsInUse = Math.max(0, day.seatsInUse - (ticket.people || 1));
-
-    // 空いた席で次を呼ぶ
-    const calledNumbers = [];
-    let fitting;
-    while ((fitting = getNextFitting(day, TOTAL_SEATS - day.seatsInUse))) {
-      fitting.called = true;
-      day.callingNumber = Math.max(day.callingNumber, fitting.number);
-      day.seatsInUse += (fitting.people || 1);
-      calledNumbers.push({ number: fitting.number, people: fitting.people || 1 });
+    // その人が使っていた席を解放
+    if (ticket.assignedSeats) {
+      ticket.assignedSeats.forEach(s => day.seats[s] = null);
     }
-
-    return res.json({
-      skipped: number,
-      callingNumber: day.callingNumber,
-      seatsInUse: day.seatsInUse,
-      totalIssued: day.counter,
-      availableSeats: Math.max(0, TOTAL_SEATS - day.seatsInUse),
-      calledNumbers,
-    });
+    const calledNumbers = callFittingGroups(day);
+    return res.json(makeAdminResponse(day, { skipped: number, calledNumbers }));
   }
 
   res.json({ error: "該当チケットなし" });
