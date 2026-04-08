@@ -350,6 +350,21 @@
       };
     }
 
+    // 401エラー時にログイン画面に戻す
+    async function adminFetch(url, options = {}) {
+      const res = await fetch(url, options);
+      if (res.status === 401) {
+        sessionStorage.removeItem("admin_token");
+        adminToken = "";
+        document.getElementById("main-screen").classList.add("hidden");
+        document.getElementById("login-screen").classList.remove("hidden");
+        document.getElementById("login-error").textContent = "セッション切れ。再ログインしてください";
+        document.getElementById("login-error").classList.remove("hidden");
+        throw new Error("unauthorized");
+      }
+      return res;
+    }
+
     function addLog(message) {
       const now = new Date();
       const time = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
@@ -381,7 +396,7 @@
 
     async function callNext() {
       try {
-        const res = await fetch("/api/admin/call-next", { method: "POST", headers: adminHeaders() });
+        const res = await adminFetch("/api/admin/call-next", { method: "POST", headers: adminHeaders() });
         const data = await res.json();
         updateUI(data);
         addLog(`📢 No.${data.callingNumber} を呼び出し`);
@@ -390,7 +405,7 @@
 
     async function releaseSeat(count) {
       try {
-        const res = await fetch("/api/admin/release-seat", {
+        const res = await adminFetch("/api/admin/release-seat", {
           method: "POST",
           headers: adminHeaders(),
           body: JSON.stringify({ count }),
@@ -435,9 +450,15 @@
       } catch {}
     }
 
-    // 初期化: トークンがあればログイン済みとして表示
+    // 初期化: トークンがあれば有効か確認してから表示
     if (adminToken) {
-      showMainScreen();
+      // テストリクエストで有効性確認
+      fetch("/api/status").then(() => {
+        showMainScreen();
+      }).catch(() => {
+        sessionStorage.removeItem("admin_token");
+        adminToken = "";
+      });
     }
   </script>
 </body>
