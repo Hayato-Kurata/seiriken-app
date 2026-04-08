@@ -97,11 +97,6 @@ app.post("/api/ticket", (req, res) => {
     return res.status(400).json({ error: "visitorId is required" });
   }
 
-  // 既に取得済みならそれを返す
-  if (day.tickets[visitorId]) {
-    return res.json({ ticket: day.tickets[visitorId], alreadyIssued: true });
-  }
-
   day.counter++;
   const ticket = {
     number: day.counter,

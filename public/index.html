@@ -343,9 +343,6 @@
       <div class="your-turn hidden" id="your-turn">
         <h3>🎉 あなたの番です！</h3>
         <p>受付までお越しください</p>
-        <button onclick="retakeTicket()" style="margin-top:14px; padding:10px 24px; border-radius:30px; border:2px solid #fff; background:transparent; color:#fff; font-size:14px; font-weight:bold; cursor:pointer;">
-          🔄 もう一度参加する
-        </button>
       </div>
 
       <div class="notify-hint">
@@ -371,11 +368,8 @@
     }
 
     function getVisitorId() {
-      let id = localStorage.getItem(VISITOR_KEY);
-      if (!id) {
-        id = "v_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
-        localStorage.setItem(VISITOR_KEY, id);
-      }
+      // 毎回新しいIDを生成（QR再読み込みで新規参加できるように）
+      const id = "v_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
       return id;
     }
 
@@ -542,15 +536,10 @@
       }
     }
 
-    // 初期化
+    // 初期化: 常に取得画面からスタート（QR再読み込みで再参加）
     function init() {
-      const saved = getSavedTicket();
-      if (saved) {
-        showTicket(saved);
-      } else {
-        fetchStatus();
-        setInterval(fetchStatus, 10000);
-      }
+      fetchStatus();
+      setInterval(fetchStatus, 10000);
       requestNotification();
     }
 
