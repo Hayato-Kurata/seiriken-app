@@ -271,13 +271,13 @@
       <button class="btn btn-call" id="btn-call" onclick="callNext()">
         📢 次の番号を呼び出す
       </button>
-      <button class="btn btn-release" id="btn-release" onclick="releaseSeat(1)">
+      <button class="btn btn-release release-btn" onclick="releaseSeat(1)">
         🪑 席が空いた（1席）
       </button>
-      <button class="btn btn-release" style="font-size:16px; padding:14px;" onclick="releaseSeat(2)">
+      <button class="btn btn-release release-btn" style="font-size:16px; padding:14px;" onclick="releaseSeat(2)">
         🪑🪑 2席同時に空いた
       </button>
-      <button class="btn btn-release" style="font-size:16px; padding:14px;" onclick="releaseSeat(3)">
+      <button class="btn btn-release release-btn" style="font-size:16px; padding:14px;" onclick="releaseSeat(3)">
         🪑🪑🪑 3席同時に空いた
       </button>
     </div>
@@ -372,7 +372,8 @@
       document.getElementById("waiting").textContent = waiting;
 
       document.getElementById("btn-call").disabled = data.callingNumber >= data.totalIssued;
-      document.getElementById("btn-release").disabled = data.seatsInUse <= 0;
+      const releaseDisabled = data.seatsInUse <= 0 && data.callingNumber >= data.totalIssued;
+      document.querySelectorAll(".release-btn").forEach(btn => btn.disabled = releaseDisabled);
 
     }
 
